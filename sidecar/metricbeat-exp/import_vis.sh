@@ -1,0 +1,131 @@
+#!/bin/bash
+
+CURL=curl
+
+ELASTICSEARCH=http://localhost:9200
+NEW_INDEX=".kibana"
+ORI_INDEX="metricbeat-"
+DIR=/beats/metricbeat/dashboards/metricbeat
+
+print_usage() {
+  echo "
+
+
+Usage:
+  $(basename "$0") -url ${ELASTICSEARCH} -index ${NEW_INDEX} -modules \"apache kafka\"
+Options:
+  -h | -help
+    Print the help menu.
+  -l | -url
+    URL for elasticsearch. By default is ${ELASTICSEARCH}
+  -m | -modules
+    Monitoring module(s) e.g. apache, kafka, mysql.
+  -i | -index
+    Kibana index pattern where to save the dashboards, visualizations,
+    index patterns. By default is ${NEW_INDEX}.
+" >&2
+}
+
+while [ "$1" != "" ]; do
+case $1 in
+    -l | -url )
+        ELASTICSEARCH=$2
+        if [ "$ELASTICSEARCH" = "" ]; then
+            echo "Error: Missing Elasticsearch URL"
+            print_usage
+            exit 1
+        fi
+        ;;
+
+    -i | -index )
+        NEW_INDEX=$2
+        if [ "$NEW_INDEX" = "" ]; then
+            echo "Error: Missing Kibana index pattern"
+            print_usage
+            exit 1
+        fi
+	$NEW_INDEX="$NEW_INDEX-metricbeat"
+        ;;
+
+    -m | -modules )
+        MODULES=$2
+        if [ "$MODULES" = "" ]; then
+            echo "Error: Missing modules"
+            print_usage
+            exit 1
+        fi
+        ;;
+
+    -h | -help )
+        print_usage
+        exit 0
+        ;;
+
+     *)
+        echo "Error: Unknown option $2"
+        print_usage
+        exit 1
+        ;;
+
+esac
+shift 2
+done
+
+echo "URL $ELASTICSEARCH"
+echo "module $MODULES"
+
+
+
+#ADDING SEARCH
+for MOD in  $MODULES; do
+
+#TMP_SED_FILE="${DIR}/tmp_search.json"
+for file in ${DIR}/${MOD}/_meta/kibana/5.x/search/*.json
+do
+    NAME=`basename ${file} .json`
+    echo "Loading search ${NAME}:"
+    SED_STRING="s/${ORI_INDEX}/${NEW_INDEX}/g"
+    sed ${SED_STRING} ${file} > "${file}.tmp"
+    ${CURL} -XPUT ${ELASTICSEARCH}/${NEW_INDEX}/search/${NAME} \
+        -d @"${file}.tmp" || exit 1
+    #rm "${file}.tmp"
+
+done
+
+for file in ${DIR}/${MOD}/_meta/kibana/default/dashboard/*.json
+do
+    NAME=`basename ${file} .json`
+    echo "Loading dashboard ${NAME}:"
+    SED_STRING="s/${ORI_INDEX}/${NEW_INDEX}/g"
+    sed ${SED_STRING} ${file} > "${file}.tmp"
+    ${CURL} -XPUT ${ELASTICSEARCH}/${NEW_INDEX}/dashboard/${NAME} \
+        -d @"${file}.tmp" || exit 1
+    #rm "${file}.tmp"
+
+done
+
+
+
+#ADDING VISUALIZATION
+for file in ${DIR}/${MOD}/_meta/kibana/5.x/visualization/*.json
+do
+    NAME=`basename ${file} .json`
+    echo "Loading visualization ${NAME}:"
+    SED_STRING="s/${ORI_INDEX}/${NEW_INDEX}/g"
+    sed ${SED_STRING} ${file} > "${file}.tmp"
+    ${CURL} -XPUT ${ELASTICSEARCH}/${NEW_INDEX}/visualization/${NAME} \
+        -d @"${file}.tmp" || exit 1
+    #rm "${file}.tmp"
+done
+
+####ADDING DASHBOARD
+
+for file in ${DIR}/${MOD}/_meta/kibana/5.x/dashboard/*.json
+do
+    NAME=`basename ${file} .json`
+    echo "Loading dashboard ${NAME}:"
+    ${CURL} -XPUT ${ELASTICSEARCH}/${NEW_INDEX}/dashboard/${NAME} \
+        -d @${file} || exit 1
+done
+
+done #done modules

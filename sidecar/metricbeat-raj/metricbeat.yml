@@ -1,0 +1,22 @@
+metricbeat.config.modules:
+  # Glob pattern for configuration reloading
+  path: ${path.config}/modules.d/*.yml
+
+  # Period on which files under path should be checked for chagnes
+  reload.period: 10s
+
+  # Set to true to enable config reloading
+  reload.enabled: true 
+
+output.elasticsearch:
+  hosts: ["ES_HOST"]
+  index: "ES_INDEX-metricbeat%{+yyyy.MM.dd}"
+  username: "ES_USERNAME"
+  password: "ES_PASSWORD"
+
+setup.template.enabled: true
+setup.template.name: "ES_INDEX-metricbeat"
+setup.template.pattern: "ES_INDEX-metricbeat%{+yyyy.MM.dd}"
+setup.template.path: "metricbeat.template.json"
+setup.template.overwrite: true
+
